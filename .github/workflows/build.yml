@@ -1,0 +1,31 @@
+name: Build
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  build:
+    runs-on: windows-latest
+    
+    steps:
+    - uses: actions/checkout@v3
+      with:
+        submodules: recursive
+    
+    - name: Setup MSVC
+      uses: microsoft/setup-msbuild@v1.1
+    
+    - name: Configure CMake
+      run: cmake -B build -G "Visual Studio 17 2022" -A x64
+    
+    - name: Build
+      run: cmake --build build --config Release
+    
+    - name: Upload Artifact
+      uses: actions/upload-artifact@v3
+      with:
+        name: NightreignStatusMod
+        path: build/bin/Release/NightreignStatusMod.dll

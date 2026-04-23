@@ -1,0 +1,24 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "Attach to Nightreign",
+            "type": "cppvsdbg",
+            "request": "attach",
+            "processName": "nightreign.exe",
+            "symbolSearchPath": "${workspaceFolder}/build/bin/Debug"
+        },
+        {
+            "name": "Launch Nightreign with Injector",
+            "type": "cppvsdbg",
+            "request": "launch",
+            "program": "D:/Games/Nightreign/nightreign.exe",
+            "args": [],
+            "stopAtEntry": false,
+            "cwd": "D:/Games/Nightreign",
+            "environment": [],
+            "console": "externalTerminal",
+            "preLaunchTask": "CMake: Build Debug"
+        }
+    ]
+}
