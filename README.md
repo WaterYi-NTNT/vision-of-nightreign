@@ -12,7 +12,7 @@ Provides real-time monitoring of enemy health, poise (stagger), and status ailme
 
 ## Installation
 ### Mod Engine 3 (Recommended)
-1. Download the latest `NightreignStatusMod.dll` from the Releases page.
+1. Download the latest `VisionOfNightreign.dll` from the Releases page.
 2. Drag and drop the DLL into the loader, or use the DLL import feature.
 3. Launch the game.
 
@@ -53,7 +53,7 @@ This project is an open-source learning project and has no connection with FromS
 
 ## 安装说明
 ### 使用 Mod Engine 3 (推荐)
-1. 从 Releases 页面下载最新的 `NightreignStatusMod.dll`。
+1. 从 Releases 页面下载最新的 `VisionOfNightreign.dll`。
 2. 将该 DLL 文件拖放进其中，或使用 DLL 文件导入功能。
 3. 正常启动游戏。
 
