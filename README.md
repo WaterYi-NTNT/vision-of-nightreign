@@ -1,4 +1,4 @@
-# Nightreign Enemy Status Overlay
+# Vision of Nightreign
 
 Provides real-time monitoring of enemy health, poise (stagger), and status ailment buildups for **ELDEN RING: Nightreign**.
 

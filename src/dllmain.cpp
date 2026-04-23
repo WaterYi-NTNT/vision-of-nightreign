@@ -107,7 +107,7 @@ DWORD WINAPI MainLoop(LPVOID)
         FILE* f;
         freopen_s(&f, "CONOUT$", "w", stdout);
 
-        std::cout << "=== Nightreign Enemy Status Mod ===" << std::endl;
+        std::cout << "=== Vision of Nightreign ===" << std::endl;
         std::cout << "Version 1.0.0" << std::endl;
     }
 

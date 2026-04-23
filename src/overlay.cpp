@@ -123,7 +123,7 @@ bool Overlay::Initialize()
     wc.style = CS_HREDRAW | CS_VREDRAW;
     wc.lpfnWndProc = WndProc;
     wc.hInstance = GetModuleHandle(nullptr);
-    wc.lpszClassName = "NightreignOverlay";
+    wc.lpszClassName = "VisionOfNightreignOverlay";
 
     RegisterClassExA(&wc);
 
@@ -132,8 +132,8 @@ bool Overlay::Initialize()
 
     overlayWindow_ = CreateWindowExA(
         WS_EX_TOPMOST | WS_EX_TRANSPARENT | WS_EX_LAYERED | WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE,
-        "NightreignOverlay",
-        "Overlay",
+        "VisionOfNightreignOverlay",
+        "Vision of Nightreign",
         WS_POPUP,
         0, 0, screenW, screenH,
         nullptr, nullptr,
