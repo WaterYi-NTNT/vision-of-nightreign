@@ -23,14 +23,14 @@
             }
         },
         {
-            "label": "CMake: Build Debug",
+            "label": "CMake: Build Release",
             "type": "shell",
             "command": "cmake",
             "args": [
                 "--build",
                 "${workspaceFolder}/build",
                 "--config",
-                "Debug"
+                "Release"
             ],
             "options": {
                 "cwd": "${workspaceFolder}"
