@@ -244,135 +244,87 @@ void Overlay::Render(const EnemyStatus& status)
     float scale = io.DisplaySize.y / 1080.0f;
     if (scale < 0.5f) scale = 1.0f;
 
-    if (status.valid) {
-        float winW = 280.0f * scale;
-        float winX = 15.0f * scale;
-        float winY = 190.0f * scale;
+    if (status.valid || showSettings_) {
+        ImGui::SetNextWindowPos(ImVec2(15.0f * scale, 190.0f * scale), ImGuiCond_FirstUseEver);
+        ImGui::SetNextWindowSize(ImVec2(280.0f * scale, 0.0f), ImGuiCond_FirstUseEver);
 
-        ImGui::SetNextWindowPos(ImVec2(winX, winY), ImGuiCond_Always);
-        ImGui::SetNextWindowSize(ImVec2(winW, 0.0f));
-
-        ImGui::PushStyleColor(ImGuiCol_WindowBg, ImVec4(0.05f, 0.05f, 0.05f, 0.65f));
-        ImGui::PushStyleColor(ImGuiCol_Border, ImVec4(0.0f, 0.0f, 0.0f, 0.0f));
+        ImGui::PushStyleColor(ImGuiCol_WindowBg, ImVec4(0.05f, 0.05f, 0.05f, showSettings_ ? 0.85f : 0.0f));
+        ImGui::PushStyleColor(ImGuiCol_Border, showSettings_ ? ImVec4(1, 1, 1, 0.5f) : ImVec4(0, 0, 0, 0));
         ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 4.0f);
         ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(8.0f, 6.0f));
-        ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(4.0f, 2.0f));
-        ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0.0f);
 
-        ImGuiWindowFlags flags =
-            ImGuiWindowFlags_NoTitleBar |
-            ImGuiWindowFlags_NoResize |
-            ImGuiWindowFlags_NoMove |
-            ImGuiWindowFlags_NoScrollbar |
-            ImGuiWindowFlags_NoCollapse |
-            ImGuiWindowFlags_AlwaysAutoResize |
-            ImGuiWindowFlags_NoFocusOnAppearing |
-            ImGuiWindowFlags_NoInputs;
+        ImGuiWindowFlags flags = ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_AlwaysAutoResize;
+        if (!showSettings_) {
+            flags |= ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoInputs | ImGuiWindowFlags_NoBackground;
+        }
 
-        if (ImGui::Begin("##BossOverlay", nullptr, flags)) {
-            {
+        if (ImGui::Begin("Vision of Nightreign ##Overlay", nullptr, flags)) {
+            if (status.valid) {
                 float hpRatio = (status.maxHp > 0) ? (float)status.hp / (float)status.maxHp : 0.0f;
-                if (hpRatio < 0.0f) hpRatio = 0.0f;
-                if (hpRatio > 1.0f) hpRatio = 1.0f;
+                hpRatio = (hpRatio < 0.0f) ? 0.0f : (hpRatio > 1.0f ? 1.0f : hpRatio);
 
                 ImGui::PushStyleColor(ImGuiCol_PlotHistogram, COLOR_HP);
-                ImGui::PushStyleColor(ImGuiCol_FrameBg, COLOR_BAR_BG);
-                ImGui::ProgressBar(hpRatio, ImVec2(-1, 10.0f * scale), "");
-                ImGui::PopStyleColor(2);
+                ImGui::ProgressBar(hpRatio, ImVec2(-1, 12.0f * scale), "");
+                ImGui::PopStyleColor();
 
                 ImVec2 barMin = ImGui::GetItemRectMin();
                 ImVec2 barMax = ImGui::GetItemRectMax();
-
                 char hpText[64];
                 sprintf_s(hpText, "%d / %d", status.hp, status.maxHp);
-
                 ImVec2 textSize = ImGui::CalcTextSize(hpText);
-                float textX = barMin.x + (barMax.x - barMin.x - textSize.x) * 0.5f;
-                float textY = barMin.y + (barMax.y - barMin.y - textSize.y) * 0.5f;
+                ImGui::GetWindowDrawList()->AddText(ImVec2(barMin.x + (barMax.x - barMin.x - textSize.x) * 0.5f, barMin.y), IM_COL32(255, 255, 255, 255), hpText);
 
-                ImGui::GetWindowDrawList()->AddText(
-                    ImVec2(textX, textY),
-                    IM_COL32(255, 255, 255, 220),
-                    hpText
-                );
-            }
-
-            if (status.maxStagger > 0.001f) {
-                float ratio = status.stagger / status.maxStagger;
-                if (ratio < 0.0f) ratio = 0.0f;
-                if (ratio > 1.0f) ratio = 1.0f;
-
-                ImGui::PushStyleColor(ImGuiCol_PlotHistogram, COLOR_STAGGER);
-                ImGui::PushStyleColor(ImGuiCol_FrameBg, COLOR_BAR_BG);
-                ImGui::ProgressBar(ratio, ImVec2(-1, 5.0f * scale), "");
-                ImGui::PopStyleColor(2);
-            }
-
-            bool anyActive = false;
-            for (int i = 0; i < 7; i++) {
-                if (status.effects[i].current > 0 && status.effects[i].max > 0) {
-                    anyActive = true;
-                    break;
+                if (status.maxStagger > 0.001f) {
+                    float sRatio = status.stagger / status.maxStagger;
+                    sRatio = (sRatio < 0.0f) ? 0.0f : (sRatio > 1.0f ? 1.0f : sRatio);
+                    ImGui::PushStyleColor(ImGuiCol_PlotHistogram, COLOR_STAGGER);
+                    ImGui::ProgressBar(sRatio, ImVec2(-1, 5.0f * scale), "");
+                    ImGui::PopStyleColor();
                 }
-            }
 
-            if (anyActive) {
-                ImGui::Spacing();
+                bool anyActive = false;
+                for (int i = 0; i < 7; i++) if (status.effects[i].current > 0 && status.effects[i].max > 0) anyActive = true;
 
-                const ImVec4 colors[7] = {
-                    COLOR_POISON, COLOR_ROT, COLOR_BLEED, COLOR_BLIGHT,
-                    COLOR_FROST, COLOR_SLEEP, COLOR_MADNESS
-                };
-
-                for (int i = 0; i < 7; i++) {
-                    int cur = status.effects[i].current;
-                    int max = status.effects[i].max;
-
-                    if (cur > 0 && max > 0) {
-                        ImGui::TextColored(colors[i], "%s", status.effects[i].name);
-                        ImGui::SameLine(ImGui::GetWindowWidth() - 80.0f * scale);
-                        ImGui::TextColored(colors[i], "%d/%d", cur, max);
-
-                        float ratio = (float)cur / (float)max;
-                        if (ratio < 0.0f) ratio = 0.0f;
-                        if (ratio > 1.0f) ratio = 1.0f;
-
-                        ImGui::PushStyleColor(ImGuiCol_PlotHistogram, colors[i]);
-                        ImGui::PushStyleColor(ImGuiCol_FrameBg, COLOR_BAR_BG);
-                        ImGui::ProgressBar(ratio, ImVec2(-1, 4.0f * scale), "");
-                        ImGui::PopStyleColor(2);
+                if (anyActive) {
+                    ImGui::Spacing();
+                    const ImVec4 colors[7] = { COLOR_POISON, COLOR_ROT, COLOR_BLEED, COLOR_BLIGHT, COLOR_FROST, COLOR_SLEEP, COLOR_MADNESS };
+                    for (int i = 0; i < 7; i++) {
+                        int cur = status.effects[i].current;
+                        int max = status.effects[i].max;
+                        if (cur > 0 && max > 0) {
+                            ImGui::TextColored(colors[i], "%s", status.effects[i].name);
+                            ImGui::SameLine(ImGui::GetWindowWidth() - 80.0f * scale);
+                            ImGui::TextColored(colors[i], "%d/%d", cur, max);
+                            float eRatio = (float)cur / (float)max;
+                            eRatio = (eRatio < 0.0f) ? 0.0f : (eRatio > 1.0f ? 1.0f : eRatio);
+                            ImGui::PushStyleColor(ImGuiCol_PlotHistogram, colors[i]);
+                            ImGui::ProgressBar(eRatio, ImVec2(-1, 4.0f * scale), "");
+                            ImGui::PopStyleColor();
+                        }
                     }
                 }
+            } else if (showSettings_) {
+                ImGui::TextDisabled("No enemy targeted.");
             }
         }
         ImGui::End();
-        ImGui::PopStyleVar(4);
+        ImGui::PopStyleVar(2);
         ImGui::PopStyleColor(2);
     }
 
     if (showSettings_) {
         ImGui::SetNextWindowPos(ImVec2(10, io.DisplaySize.y - 100), ImGuiCond_Always);
         ImGui::SetNextWindowSize(ImVec2(260, 0));
-
         ImGui::PushStyleColor(ImGuiCol_WindowBg, ImVec4(0.1f, 0.1f, 0.1f, 0.9f));
-
-        ImGuiWindowFlags settingsFlags =
-            ImGuiWindowFlags_NoTitleBar |
-            ImGuiWindowFlags_NoResize |
-            ImGuiWindowFlags_NoMove |
-            ImGuiWindowFlags_NoScrollbar |
-            ImGuiWindowFlags_AlwaysAutoResize;
-
-        if (ImGui::Begin("##Settings", nullptr, settingsFlags)) {
-            ImGui::Text("~ - Toggle Settings");
+        if (ImGui::Begin("Settings ##Panel", nullptr, ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_AlwaysAutoResize)) {
+            ImGui::Text("Press ~ to Lock UI");
             ImGui::Separator();
-            ImGui::SliderFloat("Opacity", &alpha_, 0.3f, 1.0f, "%.2f");
+            ImGui::SliderFloat("Global Opacity", &alpha_, 0.05f, 1.0f, "%.2f");
         }
         ImGui::End();
-
         ImGui::PopStyleColor();
     }
-}
+}   
 
 
 void Overlay::Shutdown()
