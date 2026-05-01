@@ -2,6 +2,7 @@
 #include <iostream>
 #include <cstdio>
 #include <dwmapi.h>
+#include <algorithm>
 
 #include <imgui.h>
 #include <imgui_impl_win32.h>
@@ -18,8 +19,10 @@ HWND Overlay::overlayWindow_ = nullptr;
 HWND Overlay::gameWindow_ = nullptr;
 bool Overlay::running_ = false;
 bool Overlay::imguiInitialized_ = false;
+
 float Overlay::alpha_ = 0.55f;
 bool Overlay::showSettings_ = false;
+float Overlay::uiScale_ = 1.0f;
 
 ID3D11Device*           Overlay::device_ = nullptr;
 ID3D11DeviceContext*    Overlay::context_ = nullptr;
@@ -28,13 +31,10 @@ ID3D11RenderTargetView* Overlay::renderTarget_ = nullptr;
 
 bool Overlay::CreateDeviceD3D(HWND hwnd)
 {
-    int screenW = GetSystemMetrics(SM_CXSCREEN);
-    int screenH = GetSystemMetrics(SM_CYSCREEN);
-
     DXGI_SWAP_CHAIN_DESC sd = {};
     sd.BufferCount = 2;
-    sd.BufferDesc.Width = screenW;
-    sd.BufferDesc.Height = screenH;
+    sd.BufferDesc.Width = 0;
+    sd.BufferDesc.Height = 0;
     sd.BufferDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
     sd.BufferDesc.RefreshRate.Numerator = 60;
     sd.BufferDesc.RefreshRate.Denominator = 1;
@@ -50,24 +50,15 @@ bool Overlay::CreateDeviceD3D(HWND hwnd)
     D3D_FEATURE_LEVEL featureLevel;
     const D3D_FEATURE_LEVEL featureLevels[] = { D3D_FEATURE_LEVEL_11_0 };
 
-    HRESULT hr = D3D11CreateDeviceAndSwapChain(
-        nullptr, D3D_DRIVER_TYPE_HARDWARE, nullptr,
-        createFlags, featureLevels, 1,
-        D3D11_SDK_VERSION, &sd,
-        &swapChain_, &device_, &featureLevel, &context_
-    );
-
-    if (FAILED(hr)) {
-        std::cerr << "[Overlay] D3D11CreateDeviceAndSwapChain failed: 0x"
-                  << std::hex << hr << std::dec << std::endl;
-        return false;
-    }
+    HRESULT hr = D3D11CreateDeviceAndSwapChain(nullptr, D3D_DRIVER_TYPE_HARDWARE, nullptr, createFlags, featureLevels, 1, D3D11_SDK_VERSION, &sd, &swapChain_, &device_, &featureLevel, &context_);
+    if (FAILED(hr)) return false;
 
     ID3D11Texture2D* backBuffer = nullptr;
     swapChain_->GetBuffer(0, IID_PPV_ARGS(&backBuffer));
-    device_->CreateRenderTargetView(backBuffer, nullptr, &renderTarget_);
-    backBuffer->Release();
-
+    if (backBuffer) {
+        device_->CreateRenderTargetView(backBuffer, nullptr, &renderTarget_);
+        backBuffer->Release();
+    }
     return true;
 }
 
@@ -78,7 +69,6 @@ void Overlay::CleanupDeviceD3D()
     if (context_)      { context_->Release();      context_ = nullptr; }
     if (device_)       { device_->Release();       device_ = nullptr; }
 }
-
 
 LRESULT CALLBACK Overlay::WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
 {
@@ -95,92 +85,47 @@ LRESULT CALLBACK Overlay::WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lPa
 
 bool Overlay::Initialize()
 {
-    std::cout << "[Overlay] Initializing..." << std::endl;
-
-    const char* titles[] = {
-        "ELDEN RING: Nightreign",
-        "ELDEN RING",
-        "Nightreign",
-        "nightreign",
-        nullptr
-    };
-
+    const char* titles[] = { "ELDEN RING: Nightreign", "ELDEN RING", "Nightreign", nullptr };
     for (int i = 0; titles[i]; i++) {
         gameWindow_ = FindWindowA(nullptr, titles[i]);
-        if (gameWindow_) {
-            std::cout << "[Overlay] Found game window: " << titles[i] << std::endl;
-            break;
-        }
+        if (gameWindow_) break;
     }
+    if (!gameWindow_) gameWindow_ = GetForegroundWindow();
 
-    if (!gameWindow_) {
-        gameWindow_ = GetForegroundWindow();
-        std::cout << "[Overlay] Using foreground window as fallback" << std::endl;
-    }
-
-    WNDCLASSEXA wc = {};
-    wc.cbSize = sizeof(WNDCLASSEXA);
-    wc.style = CS_HREDRAW | CS_VREDRAW;
-    wc.lpfnWndProc = WndProc;
-    wc.hInstance = GetModuleHandle(nullptr);
-    wc.lpszClassName = "VisionOfNightreignOverlay";
-
+    WNDCLASSEXA wc = { sizeof(WNDCLASSEXA), CS_HREDRAW | CS_VREDRAW, WndProc, 0, 0, GetModuleHandle(nullptr), nullptr, nullptr, nullptr, nullptr, "VisionOfNightreignOverlay", nullptr };
     RegisterClassExA(&wc);
 
     int screenW = GetSystemMetrics(SM_CXSCREEN);
     int screenH = GetSystemMetrics(SM_CYSCREEN);
 
-    overlayWindow_ = CreateWindowExA(
-        WS_EX_TOPMOST | WS_EX_TRANSPARENT | WS_EX_LAYERED | WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE,
-        "VisionOfNightreignOverlay",
-        "Vision of Nightreign",
-        WS_POPUP,
-        0, 0, screenW, screenH,
-        nullptr, nullptr,
-        GetModuleHandle(nullptr),
-        nullptr
-    );
+    overlayWindow_ = CreateWindowExA(WS_EX_TOPMOST | WS_EX_TRANSPARENT | WS_EX_LAYERED | WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE, "VisionOfNightreignOverlay", "Vision of Nightreign", WS_POPUP, 0, 0, screenW, screenH, nullptr, nullptr, GetModuleHandle(nullptr), nullptr);
+    if (!overlayWindow_) return false;
 
-    if (!overlayWindow_) {
-        std::cerr << "[Overlay] CreateWindowEx failed!" << std::endl;
-        return false;
-    }
-
-    SetLayeredWindowAttributes(overlayWindow_, RGB(0, 0, 0), 0, LWA_COLORKEY);
-
+    SetLayeredWindowAttributes(overlayWindow_, RGB(0, 0, 0), 255, LWA_COLORKEY);
     MARGINS margins = { -1 };
     DwmExtendFrameIntoClientArea(overlayWindow_, &margins);
 
     ShowWindow(overlayWindow_, SW_SHOWNOACTIVATE);
-    UpdateWindow(overlayWindow_);
 
-    if (!CreateDeviceD3D(overlayWindow_)) {
-        std::cerr << "[Overlay] DX11 device creation failed!" << std::endl;
-        return false;
-    }
+    if (!CreateDeviceD3D(overlayWindow_)) return false;
 
     IMGUI_CHECKVERSION();
     ImGui::CreateContext();
     ImGuiIO& io = ImGui::GetIO();
-    io.IniFilename = nullptr;
     io.ConfigFlags |= ImGuiConfigFlags_NoMouseCursorChange;
 
     ImGui::StyleColorsDark();
-
     ImGui_ImplWin32_Init(overlayWindow_);
     ImGui_ImplDX11_Init(device_, context_);
 
     imguiInitialized_ = true;
     running_ = true;
-
-    std::cout << "[Overlay] Initialized successfully!" << std::endl;
     return true;
 }
 
 void Overlay::UpdateAndRender(const EnemyStatus& status)
 {
-    if (!running_ || !imguiInitialized_)
-        return;
+    if (!running_ || !imguiInitialized_) return;
 
     MSG msg;
     while (PeekMessage(&msg, overlayWindow_, 0, 0, PM_REMOVE)) {
@@ -194,20 +139,14 @@ void Overlay::UpdateAndRender(const EnemyStatus& status)
 
     LONG_PTR exStyle = GetWindowLongPtr(overlayWindow_, GWL_EXSTYLE);
     if (showSettings_) {
-        exStyle &= ~WS_EX_TRANSPARENT;
+        exStyle &= ~WS_EX_TRANSPARENT; 
     } else {
-        exStyle |= WS_EX_TRANSPARENT;
+        exStyle |= WS_EX_TRANSPARENT;  
     }
     SetWindowLongPtr(overlayWindow_, GWL_EXSTYLE, exStyle);
 
     BYTE alphaValue = (BYTE)(alpha_ * 255.0f);
     SetLayeredWindowAttributes(overlayWindow_, RGB(0, 0, 0), alphaValue, LWA_COLORKEY | LWA_ALPHA);
-
-    int screenW = GetSystemMetrics(SM_CXSCREEN);
-    int screenH = GetSystemMetrics(SM_CYSCREEN);
-    SetWindowPos(overlayWindow_, HWND_TOPMOST,
-                 0, 0, screenW, screenH,
-                 SWP_NOACTIVATE);
 
     ImGui_ImplDX11_NewFrame();
     ImGui_ImplWin32_NewFrame();
@@ -216,16 +155,12 @@ void Overlay::UpdateAndRender(const EnemyStatus& status)
     Render(status);
 
     ImGui::Render();
-
     const float clearColor[4] = { 0.0f, 0.0f, 0.0f, 0.0f };
     context_->OMSetRenderTargets(1, &renderTarget_, nullptr);
     context_->ClearRenderTargetView(renderTarget_, clearColor);
-
     ImGui_ImplDX11_RenderDrawData(ImGui::GetDrawData());
-
     swapChain_->Present(1, 0);
 }
-
 
 void Overlay::Render(const EnemyStatus& status)
 {
@@ -238,33 +173,35 @@ void Overlay::Render(const EnemyStatus& status)
     static const ImVec4 COLOR_MADNESS  = ImVec4(0.95f, 0.70f, 0.10f, 1.0f);
     static const ImVec4 COLOR_HP       = ImVec4(0.75f, 0.15f, 0.10f, 1.0f);
     static const ImVec4 COLOR_STAGGER  = ImVec4(0.85f, 0.85f, 0.85f, 1.0f);
-    static const ImVec4 COLOR_BAR_BG   = ImVec4(0.12f, 0.12f, 0.12f, 0.80f);
 
     ImGuiIO& io = ImGui::GetIO();
-    float scale = io.DisplaySize.y / 1080.0f;
-    if (scale < 0.5f) scale = 1.0f;
+    float scale = (io.DisplaySize.y / 1080.0f) * uiScale_;
+    if (scale < 0.1f) scale = 0.1f;
 
     if (status.valid || showSettings_) {
-        ImGui::SetNextWindowPos(ImVec2(15.0f * scale, 190.0f * scale), ImGuiCond_FirstUseEver);
-        ImGui::SetNextWindowSize(ImVec2(280.0f * scale, 0.0f), ImGuiCond_FirstUseEver);
+        ImGui::SetNextWindowPos(ImVec2(50, 50), ImGuiCond_FirstUseEver);
 
-        ImGui::PushStyleColor(ImGuiCol_WindowBg, ImVec4(0.05f, 0.05f, 0.05f, showSettings_ ? 0.85f : 0.0f));
+        float windowWidth = 320.0f * scale;
+        ImGui::SetNextWindowSize(ImVec2(windowWidth, 0.0f), ImGuiCond_Always);
+
+        ImGui::PushStyleColor(ImGuiCol_WindowBg, ImVec4(0.05f, 0.05f, 0.05f, showSettings_ ? 0.7f : 0.0f));
         ImGui::PushStyleColor(ImGuiCol_Border, showSettings_ ? ImVec4(1, 1, 1, 0.5f) : ImVec4(0, 0, 0, 0));
         ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 4.0f);
-        ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(8.0f, 6.0f));
+        ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(10.0f * scale, 8.0f * scale));
 
-        ImGuiWindowFlags flags = ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_AlwaysAutoResize;
+        ImGuiWindowFlags flags = ImGuiWindowFlags_NoScrollbar;
         if (!showSettings_) {
-            flags |= ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoInputs | ImGuiWindowFlags_NoBackground;
+            flags |= ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize | 
+                     ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoInputs | 
+                     ImGuiWindowFlags_NoBackground;
         }
 
-        if (ImGui::Begin("Vision of Nightreign ##Overlay", nullptr, flags)) {
+        if (ImGui::Begin("Vision of Nightreign ##Main", nullptr, flags)) {
             if (status.valid) {
                 float hpRatio = (status.maxHp > 0) ? (float)status.hp / (float)status.maxHp : 0.0f;
-                hpRatio = (hpRatio < 0.0f) ? 0.0f : (hpRatio > 1.0f ? 1.0f : hpRatio);
-
+                hpRatio = std::clamp(hpRatio, 0.0f, 1.0f);
                 ImGui::PushStyleColor(ImGuiCol_PlotHistogram, COLOR_HP);
-                ImGui::ProgressBar(hpRatio, ImVec2(-1, 12.0f * scale), "");
+                ImGui::ProgressBar(hpRatio, ImVec2(-1, 16.0f * scale), "");
                 ImGui::PopStyleColor();
 
                 ImVec2 barMin = ImGui::GetItemRectMin();
@@ -272,39 +209,40 @@ void Overlay::Render(const EnemyStatus& status)
                 char hpText[64];
                 sprintf_s(hpText, "%d / %d", status.hp, status.maxHp);
                 ImVec2 textSize = ImGui::CalcTextSize(hpText);
-                ImGui::GetWindowDrawList()->AddText(ImVec2(barMin.x + (barMax.x - barMin.x - textSize.x) * 0.5f, barMin.y), IM_COL32(255, 255, 255, 255), hpText);
+                ImGui::GetWindowDrawList()->AddText(ImVec2(barMin.x + (barMax.x - barMin.x - textSize.x) * 0.5f, barMin.y + (barMax.y - barMin.y - textSize.y) * 0.5f), IM_COL32(255, 255, 255, 255), hpText);
 
                 if (status.maxStagger > 0.001f) {
-                    float sRatio = status.stagger / status.maxStagger;
-                    sRatio = (sRatio < 0.0f) ? 0.0f : (sRatio > 1.0f ? 1.0f : sRatio);
+                    float sRatio = std::clamp(status.stagger / status.maxStagger, 0.0f, 1.0f);
                     ImGui::PushStyleColor(ImGuiCol_PlotHistogram, COLOR_STAGGER);
-                    ImGui::ProgressBar(sRatio, ImVec2(-1, 5.0f * scale), "");
+                    ImGui::ProgressBar(sRatio, ImVec2(-1, 6.0f * scale), "");
                     ImGui::PopStyleColor();
                 }
 
-                bool anyActive = false;
-                for (int i = 0; i < 7; i++) if (status.effects[i].current > 0 && status.effects[i].max > 0) anyActive = true;
-
-                if (anyActive) {
+                bool anyEff = false;
+                for (int i = 0; i < 7; i++) if (status.effects[i].current > 0) anyEff = true;
+                if (anyEff) {
                     ImGui::Spacing();
                     const ImVec4 colors[7] = { COLOR_POISON, COLOR_ROT, COLOR_BLEED, COLOR_BLIGHT, COLOR_FROST, COLOR_SLEEP, COLOR_MADNESS };
                     for (int i = 0; i < 7; i++) {
-                        int cur = status.effects[i].current;
-                        int max = status.effects[i].max;
-                        if (cur > 0 && max > 0) {
+                        if (status.effects[i].current > 0 && status.effects[i].max > 0) {
                             ImGui::TextColored(colors[i], "%s", status.effects[i].name);
-                            ImGui::SameLine(ImGui::GetWindowWidth() - 80.0f * scale);
-                            ImGui::TextColored(colors[i], "%d/%d", cur, max);
-                            float eRatio = (float)cur / (float)max;
-                            eRatio = (eRatio < 0.0f) ? 0.0f : (eRatio > 1.0f ? 1.0f : eRatio);
+                            
+                            char valText[32];
+                            sprintf_s(valText, "%d/%d", status.effects[i].current, status.effects[i].max);
+                            float valTextWidth = ImGui::CalcTextSize(valText).x;
+                            
+                            ImGui::SameLine(windowWidth - valTextWidth - (20.0f * scale)); 
+                            ImGui::TextColored(colors[i], "%s", valText);
+                            
+                            float eRatio = std::clamp((float)status.effects[i].current / (float)status.effects[i].max, 0.0f, 1.0f);
                             ImGui::PushStyleColor(ImGuiCol_PlotHistogram, colors[i]);
-                            ImGui::ProgressBar(eRatio, ImVec2(-1, 4.0f * scale), "");
+                            ImGui::ProgressBar(eRatio, ImVec2(-1, 5.0f * scale), "");
                             ImGui::PopStyleColor();
                         }
                     }
                 }
-            } else if (showSettings_) {
-                ImGui::TextDisabled("No enemy targeted.");
+            } else {
+                ImGui::TextDisabled("Vision of Nightreign\n(Waiting for target...)");
             }
         }
         ImGui::End();
@@ -313,18 +251,25 @@ void Overlay::Render(const EnemyStatus& status)
     }
 
     if (showSettings_) {
-        ImGui::SetNextWindowPos(ImVec2(10, io.DisplaySize.y - 100), ImGuiCond_Always);
-        ImGui::SetNextWindowSize(ImVec2(260, 0));
-        ImGui::PushStyleColor(ImGuiCol_WindowBg, ImVec4(0.1f, 0.1f, 0.1f, 0.9f));
-        if (ImGui::Begin("Settings ##Panel", nullptr, ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_AlwaysAutoResize)) {
-            ImGui::Text("Press ~ to Lock UI");
+        ImGui::SetNextWindowPos(ImVec2(20, io.DisplaySize.y - 180), ImGuiCond_Always);
+        ImGui::SetNextWindowSize(ImVec2(300, 0));
+        if (ImGui::Begin("Overlay Settings", nullptr, ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_AlwaysAutoResize)) {
+            ImGui::SliderFloat("Opacity", &alpha_, 0.1f, 1.0f, "%.2f");
+            ImGui::SliderFloat("UI Scale", &uiScale_, 0.5f, 2.5f, "%.2f");
+            
+            if (ImGui::Button("Reset UI", ImVec2(-1, 0))) {
+                alpha_ = 0.55f;
+                uiScale_ = 1.0f;
+                ImGui::SetWindowPos("Vision of Nightreign ##Main", ImVec2(50, 50));
+            }
             ImGui::Separator();
-            ImGui::SliderFloat("Global Opacity", &alpha_, 0.05f, 1.0f, "%.2f");
+            ImGui::TextColored(ImVec4(1, 0.8f, 0, 1), "Controls:");
+            ImGui::TextDisabled("- Press ~ to Lock/Unlock UI");
+            ImGui::TextDisabled("- When Unlocked: Drag top bar to move");
         }
         ImGui::End();
-        ImGui::PopStyleColor();
     }
-}   
+}
 
 
 void Overlay::Shutdown()
@@ -335,16 +280,12 @@ void Overlay::Shutdown()
         ImGui::DestroyContext();
         imguiInitialized_ = false;
     }
-
     CleanupDeviceD3D();
-
     if (overlayWindow_) {
         DestroyWindow(overlayWindow_);
         overlayWindow_ = nullptr;
     }
-
-    UnregisterClassA("NightreignOverlay", GetModuleHandle(nullptr));
-    running_ = false;
+    UnregisterClassA("VisionOfNightreignOverlay", GetModuleHandle(nullptr));
 }
 
 } // namespace nightreign

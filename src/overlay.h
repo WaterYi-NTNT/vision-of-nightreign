@@ -15,13 +15,10 @@ struct StatusEffect {
 
 struct EnemyStatus {
     bool valid = false;
-
     int32_t hp = 0;
     int32_t maxHp = 0;
-
     float stagger = 0.0f;
     float maxStagger = 0.0f;
-
     StatusEffect effects[7];
 };
 
@@ -44,6 +41,7 @@ private:
 
     static float alpha_;
     static bool showSettings_;
+    static float uiScale_;
 
     static ID3D11Device*           device_;
     static ID3D11DeviceContext*    context_;

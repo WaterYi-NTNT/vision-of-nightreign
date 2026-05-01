@@ -9,7 +9,6 @@ add_library(${PROJECT_NAME} SHARED
     src/game_handler.cpp
     src/memory.cpp
     src/overlay.cpp
-    src/ui_renderer.cpp
 )
 
 target_include_directories(${PROJECT_NAME} PRIVATE
