@@ -6,8 +6,7 @@
 namespace nightreign {
 
 struct WorldChrManImp {
-    char pad_0x0000[0x10EF8];  // Padding to player array (adjust if needed)
-    // Add other fields as discovered
+    char pad_0x0000[0x10EF8];
 };
 
 } // namespace nightreign
