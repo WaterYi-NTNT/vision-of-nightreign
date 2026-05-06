@@ -40,7 +40,9 @@ private:
     static bool imguiInitialized_;
 
     static float alpha_;
+    static float lastAlpha_;
     static bool showSettings_;
+    static bool lastShowSettings_;
     static float uiScale_;
 
     static ID3D11Device*           device_;
@@ -49,6 +51,6 @@ private:
     static ID3D11RenderTargetView* renderTarget_;
 };
 
-} // namespace nightreign
+}
 
 #endif

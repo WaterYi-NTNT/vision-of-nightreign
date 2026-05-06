@@ -3,7 +3,6 @@
 #include <cstdio>
 #include <dwmapi.h>
 #include <algorithm>
-
 #include <imgui.h>
 #include <imgui_impl_win32.h>
 #include <imgui_impl_dx11.h>
@@ -21,7 +20,9 @@ bool Overlay::running_ = false;
 bool Overlay::imguiInitialized_ = false;
 
 float Overlay::alpha_ = 0.55f;
+float Overlay::lastAlpha_ = -1.0f;
 bool Overlay::showSettings_ = false;
+bool Overlay::lastShowSettings_ = false;
 float Overlay::uiScale_ = 1.0f;
 
 ID3D11Device*           Overlay::device_ = nullptr;
@@ -36,7 +37,7 @@ bool Overlay::CreateDeviceD3D(HWND hwnd)
     sd.BufferDesc.Width = 0;
     sd.BufferDesc.Height = 0;
     sd.BufferDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
-    sd.BufferDesc.RefreshRate.Numerator = 60;
+    sd.BufferDesc.RefreshRate.Numerator = 0;
     sd.BufferDesc.RefreshRate.Denominator = 1;
     sd.Flags = DXGI_SWAP_CHAIN_FLAG_ALLOW_MODE_SWITCH;
     sd.BufferUsage = DXGI_USAGE_RENDER_TARGET_OUTPUT;
@@ -90,7 +91,6 @@ bool Overlay::Initialize()
         gameWindow_ = FindWindowA(nullptr, titles[i]);
         if (gameWindow_) break;
     }
-    if (!gameWindow_) gameWindow_ = GetForegroundWindow();
 
     WNDCLASSEXA wc = { sizeof(WNDCLASSEXA), CS_HREDRAW | CS_VREDRAW, WndProc, 0, 0, GetModuleHandle(nullptr), nullptr, nullptr, nullptr, nullptr, "VisionOfNightreignOverlay", nullptr };
     RegisterClassExA(&wc);
@@ -105,14 +105,13 @@ bool Overlay::Initialize()
     MARGINS margins = { -1 };
     DwmExtendFrameIntoClientArea(overlayWindow_, &margins);
 
-    ShowWindow(overlayWindow_, SW_SHOWNOACTIVATE);
-
     if (!CreateDeviceD3D(overlayWindow_)) return false;
 
     IMGUI_CHECKVERSION();
     ImGui::CreateContext();
     ImGuiIO& io = ImGui::GetIO();
     io.ConfigFlags |= ImGuiConfigFlags_NoMouseCursorChange;
+    io.IniFilename = nullptr;
 
     ImGui::StyleColorsDark();
     ImGui_ImplWin32_Init(overlayWindow_);
@@ -127,6 +126,23 @@ void Overlay::UpdateAndRender(const EnemyStatus& status)
 {
     if (!running_ || !imguiInitialized_) return;
 
+    if (!gameWindow_ || !IsWindow(gameWindow_)) {
+        gameWindow_ = FindWindowA(nullptr, "ELDEN RING NIGHTREIGN");
+    }
+
+    HWND foreground = GetForegroundWindow();
+    bool gameIsActive = (foreground == gameWindow_ || foreground == overlayWindow_);
+    bool gameIsMinimized = IsIconic(gameWindow_);
+
+    if (!gameIsActive || gameIsMinimized) {
+        ShowWindow(overlayWindow_, SW_HIDE);
+        Sleep(100);
+        return;
+    } else {
+        ShowWindow(overlayWindow_, SW_SHOWNOACTIVATE);
+        SetWindowPos(overlayWindow_, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
+    }
+
     MSG msg;
     while (PeekMessage(&msg, overlayWindow_, 0, 0, PM_REMOVE)) {
         TranslateMessage(&msg);
@@ -137,16 +153,18 @@ void Overlay::UpdateAndRender(const EnemyStatus& status)
         showSettings_ = !showSettings_;
     }
 
-    LONG_PTR exStyle = GetWindowLongPtr(overlayWindow_, GWL_EXSTYLE);
-    if (showSettings_) {
-        exStyle &= ~WS_EX_TRANSPARENT; 
-    } else {
-        exStyle |= WS_EX_TRANSPARENT;  
+    if (showSettings_ != lastShowSettings_) {
+        LONG_PTR exStyle = GetWindowLongPtr(overlayWindow_, GWL_EXSTYLE);
+        if (showSettings_) exStyle &= ~WS_EX_TRANSPARENT;
+        else exStyle |= WS_EX_TRANSPARENT;
+        SetWindowLongPtr(overlayWindow_, GWL_EXSTYLE, exStyle);
+        lastShowSettings_ = showSettings_;
     }
-    SetWindowLongPtr(overlayWindow_, GWL_EXSTYLE, exStyle);
 
-    BYTE alphaValue = (BYTE)(alpha_ * 255.0f);
-    SetLayeredWindowAttributes(overlayWindow_, RGB(0, 0, 0), alphaValue, LWA_COLORKEY | LWA_ALPHA);
+    if (std::abs(alpha_ - lastAlpha_) > 0.001f) {
+        SetLayeredWindowAttributes(overlayWindow_, RGB(0, 0, 0), (BYTE)(alpha_ * 255.0f), LWA_COLORKEY | LWA_ALPHA);
+        lastAlpha_ = alpha_;
+    }
 
     ImGui_ImplDX11_NewFrame();
     ImGui_ImplWin32_NewFrame();
@@ -159,7 +177,7 @@ void Overlay::UpdateAndRender(const EnemyStatus& status)
     context_->OMSetRenderTargets(1, &renderTarget_, nullptr);
     context_->ClearRenderTargetView(renderTarget_, clearColor);
     ImGui_ImplDX11_RenderDrawData(ImGui::GetDrawData());
-    swapChain_->Present(1, 0);
+    swapChain_->Present(0, 0);
 }
 
 void Overlay::Render(const EnemyStatus& status)
@@ -179,10 +197,9 @@ void Overlay::Render(const EnemyStatus& status)
     if (scale < 0.1f) scale = 0.1f;
 
     if (status.valid || showSettings_) {
-        ImGui::SetNextWindowPos(ImVec2(50, 50), ImGuiCond_FirstUseEver);
-
         float windowWidth = 320.0f * scale;
         ImGui::SetNextWindowSize(ImVec2(windowWidth, 0.0f), ImGuiCond_Always);
+        ImGui::SetNextWindowPos(ImVec2(50, 50), ImGuiCond_FirstUseEver);
 
         ImGui::PushStyleColor(ImGuiCol_WindowBg, ImVec4(0.05f, 0.05f, 0.05f, showSettings_ ? 0.7f : 0.0f));
         ImGui::PushStyleColor(ImGuiCol_Border, showSettings_ ? ImVec4(1, 1, 1, 0.5f) : ImVec4(0, 0, 0, 0));
@@ -191,9 +208,7 @@ void Overlay::Render(const EnemyStatus& status)
 
         ImGuiWindowFlags flags = ImGuiWindowFlags_NoScrollbar;
         if (!showSettings_) {
-            flags |= ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize | 
-                     ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoInputs | 
-                     ImGuiWindowFlags_NoBackground;
+            flags |= ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoInputs | ImGuiWindowFlags_NoBackground;
         }
 
         if (ImGui::Begin("Vision of Nightreign ##Main", nullptr, flags)) {
@@ -226,14 +241,11 @@ void Overlay::Render(const EnemyStatus& status)
                     for (int i = 0; i < 7; i++) {
                         if (status.effects[i].current > 0 && status.effects[i].max > 0) {
                             ImGui::TextColored(colors[i], "%s", status.effects[i].name);
-                            
                             char valText[32];
                             sprintf_s(valText, "%d/%d", status.effects[i].current, status.effects[i].max);
-                            float valTextWidth = ImGui::CalcTextSize(valText).x;
-                            
-                            ImGui::SameLine(windowWidth - valTextWidth - (20.0f * scale)); 
+                            float valWidth = ImGui::CalcTextSize(valText).x;
+                            ImGui::SameLine(windowWidth - valWidth - (20.0f * scale));
                             ImGui::TextColored(colors[i], "%s", valText);
-                            
                             float eRatio = std::clamp((float)status.effects[i].current / (float)status.effects[i].max, 0.0f, 1.0f);
                             ImGui::PushStyleColor(ImGuiCol_PlotHistogram, colors[i]);
                             ImGui::ProgressBar(eRatio, ImVec2(-1, 5.0f * scale), "");
@@ -256,21 +268,17 @@ void Overlay::Render(const EnemyStatus& status)
         if (ImGui::Begin("Overlay Settings", nullptr, ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_AlwaysAutoResize)) {
             ImGui::SliderFloat("Opacity", &alpha_, 0.1f, 1.0f, "%.2f");
             ImGui::SliderFloat("UI Scale", &uiScale_, 0.5f, 2.5f, "%.2f");
-            
             if (ImGui::Button("Reset UI", ImVec2(-1, 0))) {
                 alpha_ = 0.55f;
                 uiScale_ = 1.0f;
                 ImGui::SetWindowPos("Vision of Nightreign ##Main", ImVec2(50, 50));
             }
             ImGui::Separator();
-            ImGui::TextColored(ImVec4(1, 0.8f, 0, 1), "Controls:");
-            ImGui::TextDisabled("- Press ~ to Lock/Unlock UI");
-            ImGui::TextDisabled("- When Unlocked: Drag top bar to move");
+            ImGui::TextDisabled("Press ~ to Lock/Unlock");
         }
         ImGui::End();
     }
 }
-
 
 void Overlay::Shutdown()
 {
@@ -288,4 +296,4 @@ void Overlay::Shutdown()
     UnregisterClassA("VisionOfNightreignOverlay", GetModuleHandle(nullptr));
 }
 
-} // namespace nightreign
+}
