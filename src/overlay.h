@@ -4,6 +4,7 @@
 #include <Windows.h>
 #include <d3d11.h>
 #include <cstdint>
+#include <string>
 
 namespace nightreign {
 
@@ -34,6 +35,10 @@ private:
     static void CleanupDeviceD3D();
     static void Render(const EnemyStatus& status);
 
+    static void LoadSettings();
+    static void SaveSettings();
+    static std::string GetConfigPath();
+
     static HWND overlayWindow_;
     static HWND gameWindow_;
     static bool running_;
@@ -44,6 +49,14 @@ private:
     static bool showSettings_;
     static bool lastShowSettings_;
     static float uiScale_;
+    static float fontScale_;
+    static float posX_;
+    static float posY_;
+    
+    static bool alwaysShowStagger_;
+    static bool alwaysShowEffects_;
+    static bool showNumericalValues_;
+    static int menuKeyVSC_;
 
     static ID3D11Device*           device_;
     static ID3D11DeviceContext*    context_;

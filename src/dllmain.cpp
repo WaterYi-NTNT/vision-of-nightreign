@@ -108,7 +108,7 @@ DWORD WINAPI MainLoop(LPVOID)
         freopen_s(&f, "CONOUT$", "w", stdout);
 
         std::cout << "=== Vision of Nightreign ===" << std::endl;
-        std::cout << "Version 1.0.0" << std::endl;
+        std::cout << "Version 1.0.3" << std::endl;
     }
 
     std::this_thread::sleep_for(std::chrono::seconds(5));
