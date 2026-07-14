@@ -34,7 +34,7 @@ static const char* EFFECT_NAMES[] = {
 
 EnemyStatus ReadEnemyStatus(ChrIns* player)
 {
-    EnemyStatus status = {};
+    EnemyStatus status{};
     status.valid = false;
 
     uintptr_t playerAddr = reinterpret_cast<uintptr_t>(player);
@@ -48,7 +48,6 @@ EnemyStatus ReadEnemyStatus(ChrIns* player)
         return status;
 
     uintptr_t enemyRawAddr = reinterpret_cast<uintptr_t>(enemy);
-
     uintptr_t enemyChrIns = *reinterpret_cast<uintptr_t*>(enemyRawAddr);
     if (!enemyChrIns)
         return status;
@@ -78,20 +77,12 @@ EnemyStatus ReadEnemyStatus(ChrIns* player)
     if (resistModule) {
         for (int i = 0; i < 7; i++) {
             status.effects[i].name = EFFECT_NAMES[i];
-
             int32_t remaining = *reinterpret_cast<int32_t*>(resistModule + 0x10 + i * 4);
             int32_t max       = *reinterpret_cast<int32_t*>(resistModule + 0x2C + i * 4);
-
             if (max > 0) {
-                int32_t buildup = max - remaining;
-                buildup = std::clamp(buildup, 0, max);
-
+                int32_t buildup = std::clamp(max - remaining, 0, max);
                 status.effects[i].current = buildup;
-                status.effects[i].max     = max;
-            }
-            else {
-                status.effects[i].current = 0;
-                status.effects[i].max     = 0;
+                status.effects[i].max = max;
             }
         }
     }
@@ -106,34 +97,28 @@ DWORD WINAPI MainLoop(LPVOID)
         AllocConsole();
         FILE* f;
         freopen_s(&f, "CONOUT$", "w", stdout);
-
-        std::cout << "=== Vision of Nightreign ===" << std::endl;
-        std::cout << "Version 1.0.3" << std::endl;
-    }
-
-    std::this_thread::sleep_for(std::chrono::seconds(5));
-
-    if (!GameHandler::Initialize()) {
-        if (DEBUG_CONSOLE) {
-            std::cerr << "Failed to initialize GameHandler!" << std::endl;
-        }
-        return 0;
+        std::cout << "=== Vision of Nightreign (Hook Version) ===" << std::endl;
     }
 
     if (!Overlay::Initialize()) {
-        if (DEBUG_CONSOLE) {
-            std::cerr << "Failed to initialize Overlay!" << std::endl;
-            std::cerr << "Continuing with console only..." << std::endl;
-        }
+        if (DEBUG_CONSOLE) std::cerr << "Overlay hook init failed!\n";
+        return 0; 
     }
+
+    if (DEBUG_CONSOLE) std::cout << "Overlay initialized. Waiting for game data...\n";
+
+    while (!GameHandler::Initialize()) {
+        std::this_thread::sleep_for(std::chrono::seconds(1));
+    }
+
+    if (DEBUG_CONSOLE) std::cout << "Game data ready! Entering main loop.\n";
 
     while (true)
     {
-        std::this_thread::sleep_for(std::chrono::milliseconds(16)); // ~60fps
+        std::this_thread::sleep_for(std::chrono::milliseconds(16));
 
         auto player = GameHandler::GetPlayerChrIns();
-
-        EnemyStatus status = {};
+        EnemyStatus status{};
         if (player) {
             status = ReadEnemyStatus(player);
         }
@@ -144,18 +129,6 @@ DWORD WINAPI MainLoop(LPVOID)
             static int frameCount = 0;
             if (status.valid && (frameCount++ % 30 == 0)) {
                 std::cout << "HP: " << status.hp << " / " << status.maxHp << std::endl;
-
-                if (status.maxStagger > 0)
-                    std::cout << "Stagger: " << status.stagger << " / " << status.maxStagger << std::endl;
-
-                for (int i = 0; i < 7; i++) {
-                    if (status.effects[i].max > 0) {
-                        std::cout << EFFECT_NAMES[i] << ": "
-                                  << status.effects[i].current << " / "
-                                  << status.effects[i].max << std::endl;
-                    }
-                }
-                std::cout << "---" << std::endl;
             }
         }
     }
@@ -165,19 +138,19 @@ DWORD WINAPI MainLoop(LPVOID)
 
 BOOL APIENTRY DllMain(HMODULE hModule, DWORD ul_reason_for_call, LPVOID lpReserved)
 {
-    (void)lpReserved;
-
     switch (ul_reason_for_call)
     {
-        case DLL_PROCESS_ATTACH:
-            DisableThreadLibraryCalls(hModule);
-            CreateThread(nullptr, 0, MainLoop, nullptr, 0, nullptr);
-            break;
+    case DLL_PROCESS_ATTACH:
+        DisableThreadLibraryCalls(hModule);
+        CreateThread(nullptr, 0, MainLoop, nullptr, 0, nullptr);
+        break;
 
-        case DLL_PROCESS_DETACH:
+    case DLL_PROCESS_DETACH:
+        if (lpReserved == nullptr) {
             Overlay::Shutdown();
             GameHandler::Shutdown();
-            break;
+        }
+        break;
     }
     return TRUE;
 }

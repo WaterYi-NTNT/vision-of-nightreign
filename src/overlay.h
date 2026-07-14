@@ -2,11 +2,10 @@
 #define NIGHTREIGN_OVERLAY_H
 
 #include <Windows.h>
-#include <d3d11.h>
 #include <cstdint>
-#include <string>
 
 namespace nightreign {
+
 
 struct StatusEffect {
     const char* name = "";
@@ -23,45 +22,19 @@ struct EnemyStatus {
     StatusEffect effects[7];
 };
 
+
 class Overlay {
 public:
     static bool Initialize();
+
     static void UpdateAndRender(const EnemyStatus& status);
+
     static void Shutdown();
 
-private:
-    static LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam);
-    static bool CreateDeviceD3D(HWND hwnd);
-    static void CleanupDeviceD3D();
     static void Render(const EnemyStatus& status);
 
-    static void LoadSettings();
-    static void SaveSettings();
-    static std::string GetConfigPath();
-
-    static HWND overlayWindow_;
-    static HWND gameWindow_;
-    static bool running_;
-    static bool imguiInitialized_;
-
-    static float alpha_;
-    static float lastAlpha_;
-    static bool showSettings_;
-    static bool lastShowSettings_;
-    static float uiScale_;
-    static float fontScale_;
-    static float posX_;
-    static float posY_;
-    
-    static bool alwaysShowStagger_;
-    static bool alwaysShowEffects_;
-    static bool showNumericalValues_;
-    static int menuKeyVSC_;
-
-    static ID3D11Device*           device_;
-    static ID3D11DeviceContext*    context_;
-    static IDXGISwapChain*         swapChain_;
-    static ID3D11RenderTargetView* renderTarget_;
+private:
+    Overlay() = delete;
 };
 
 }

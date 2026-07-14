@@ -33,3 +33,16 @@ jobs:
         name: VisionOfNightreign-v1.0.3-build-${{ github.run_number }}
         path: build/bin/Release/*.dll
         if-no-files-found: error
+
+    - name: Create Release Zip
+      shell: pwsh
+      run: |
+        Compress-Archive -Path build/bin/Release/*.dll, VisionOfNightreign.ini -DestinationPath VisionOfNightreign-v1.0.3.zip
+
+    - name: Auto Release
+      uses: softprops/action-gh-release@v2
+      if: startsWith(github.ref, 'refs/tags/')
+      with:
+        files: VisionOfNightreign-v1.0.3.zip
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
