@@ -32,6 +32,26 @@ add_library(VisionOfNightreign SHARED
     ${MINHOOK_SOURCES}
 )
 
+file(WRITE "${CMAKE_CURRENT_BINARY_DIR}/VisionOfNightreign_default.ini"
+    "[Settings]
+    Opacity=0.55
+    UIScale=1.0
+    FontScale=1.0
+    PosX=50.0
+    PosY=50.0
+    AlwaysShowStagger=0
+    AlwaysShowEffects=0
+    ShowNumericalValues=1
+    MenuKeyCode=192"
+)
+
+add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different
+        "${CMAKE_CURRENT_BINARY_DIR}/VisionOfNightreign_default.ini"
+        "$<TARGET_FILE_DIR:${PROJECT_NAME}>/VisionOfNightreign.ini"
+    COMMENT "Copying default INI to output directory"
+)
+
 target_include_directories(VisionOfNightreign PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/src
     ${CMAKE_CURRENT_SOURCE_DIR}/src/structs
